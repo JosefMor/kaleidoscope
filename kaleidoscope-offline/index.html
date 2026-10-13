@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<?xml encoding="UTF-8"><html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Player</title>
+<link rel="icon" href="data:,">
+<style>
+  /* ----------------------------------------------------------------
+     International / Swiss typographic style
+     monochrome &middot; grid &middot; generous whitespace &middot; one accent
+  ---------------------------------------------------------------- */
+  :root{
+    --ink:#111111;
+    --paper:#f4f4f2;
+    --line:#111111;
+    --mute:#8a8a85;
+    --accent:#e8442a;
+    --hair:1px;
+    --gut:clamp(16px,4vw,40px);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:"Helvetica Neue",Helvetica,Arial,"Segoe UI",Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    line-height:1.25;
+    display:flex;
+    justify-content:center;
+    padding:var(--gut);
+  }
+  .stage{
+    width:100%;
+    max-width:680px;
+    display:flex;
+    flex-direction:column;
+    gap:clamp(24px,5vw,48px);
+  }
+
+  /* Masthead */
+  .head{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    border-bottom:2px solid var(--line);
+    padding-bottom:12px;
+    gap:16px;
+  }
+  .head h1{
+    font-size:clamp(20px,5vw,30px);
+    font-weight:700;
+    letter-spacing:-0.02em;
+    text-transform:uppercase;
+  }
+  .head .idx{
+    font-size:12px;
+    letter-spacing:0.18em;
+    text-transform:uppercase;
+    color:var(--mute);
+    white-space:nowrap;
+  }
+
+  /* Section block */
+  .block{display:flex;flex-direction:column;gap:12px;}
+  .label{
+    font-size:11px;
+    letter-spacing:0.22em;
+    text-transform:uppercase;
+    color:var(--mute);
+    display:flex;
+    justify-content:space-between;
+  }
+  .label b{color:var(--ink);font-weight:700;}
+
+  /* Selector grid */
+  .grid{display:grid;gap:var(--hair);background:var(--line);border:var(--hair) solid var(--line);}
+  .grid.two{grid-template-columns:1fr 1fr;}
+  .grid.three{grid-template-columns:repeat(3,1fr);}
+  .cell{
+    appearance:none;
+    -webkit-appearance:none;
+    border:0;
+    background:var(--paper);
+    color:var(--ink);
+    font:inherit;
+    text-align:left;
+    padding:14px 14px;
+    cursor:pointer;
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    min-height:64px;
+    justify-content:space-between;
+    transition:background .12s ease,color .12s ease;
+  }
+  .cell:hover{background:#e9e9e6;}
+  .cell .n{font-size:11px;letter-spacing:0.16em;color:var(--mute);text-transform:uppercase;}
+  .cell .t{font-size:15px;font-weight:600;letter-spacing:-0.01em;}
+  .cell[aria-pressed="true"]{background:var(--ink);color:var(--paper);}
+  .cell[aria-pressed="true"] .n{color:rgba(244,244,242,.6);}
+  .cell:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;}
+
+  /* Transport */
+  .transport{display:flex;flex-direction:column;gap:14px;}
+  .tc{display:flex;align-items:baseline;gap:10px;font-variant-numeric:tabular-nums;letter-spacing:-0.01em;}
+  .tc-cur{font-size:clamp(34px,9vw,54px);font-weight:700;line-height:1;}
+  .tc-dur{font-size:14px;letter-spacing:0.04em;color:var(--mute);}
+  .timerow{display:flex;justify-content:space-between;font-size:12px;letter-spacing:0.06em;font-variant-numeric:tabular-nums;color:var(--mute);}
+  .timerow b{color:var(--ink);font-weight:700;}
+
+  /* Scrubber */
+  .scrub-wrap{position:relative;width:100%;height:28px;}
+  .scrub-buf{
+    position:absolute;left:0;top:50%;transform:translateY(-50%);
+    height:2px;background:#c8c8c4;width:0;pointer-events:none;transition:width .4s linear;
+  }
+  .scrub{
+    -webkit-appearance:none;appearance:none;
+    position:relative;width:100%;height:28px;background:transparent;cursor:pointer;
+  }
+  .scrub:focus{outline:none;}
+  .scrub::-webkit-slider-runnable-track{height:2px;background:var(--line);}
+  .scrub::-moz-range-track{height:2px;background:var(--line);}
+  .scrub::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;
+    width:14px;height:14px;background:var(--accent);border-radius:50%;
+    margin-top:-6px;border:0;
+  }
+  .scrub::-moz-range-thumb{width:14px;height:14px;background:var(--accent);border:0;border-radius:50%;}
+
+  /* Loading state on track buttons */
+  .cell.loading .t::after{content:" &darr;";font-size:11px;color:var(--mute);}
+
+  .controls{display:flex;align-items:stretch;gap:var(--hair);background:var(--line);border:var(--hair) solid var(--line);}
+  .btn{
+    flex:1;appearance:none;border:0;background:var(--paper);color:var(--ink);
+    font:inherit;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;font-size:13px;
+    padding:18px 12px;cursor:pointer;transition:background .12s ease,color .12s ease;
+  }
+  .btn:hover{background:#e9e9e6;}
+  .btn:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;}
+  .btn.primary{flex:2;background:var(--ink);color:var(--paper);}
+  .btn.primary:hover{background:#000;}
+
+  /* Mixers */
+  .mix{display:grid;grid-template-columns:1fr 1fr;gap:var(--gut);}
+  .vol .label{margin-bottom:8px;}
+  .vrange{
+    -webkit-appearance:none;appearance:none;width:100%;height:24px;background:transparent;cursor:pointer;
+  }
+  .vrange::-webkit-slider-runnable-track{height:2px;background:var(--line);}
+  .vrange::-moz-range-track{height:2px;background:var(--line);}
+  .vrange::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:12px;height:12px;background:var(--ink);border:0;border-radius:50%;margin-top:-5px;}
+  .vrange::-moz-range-thumb{width:12px;height:12px;background:var(--ink);border:0;border-radius:50%;}
+
+  .foot{font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:var(--mute);border-top:var(--hair) solid var(--line);padding-top:12px;display:flex;justify-content:space-between;gap:12px;}
+  .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--mute);vertical-align:middle;margin-right:6px;}
+  .dot.on{background:var(--accent);}
+
+  @media (max-width:420px){
+    .grid.three{grid-template-columns:repeat(2,1fr);}
+    .mix{grid-template-columns:1fr;gap:16px;}
+  }
+</style>
+</head>
+<body>
+  <main class="stage">
+
+    <header class="head">
+      <h1>Kaleidoscope</h1>
+    </header>
+
+    <!-- VOICE OVER -->
+    <section class="block">
+      <div class="label"><span>01 &mdash; Voice Over</span><b id="voState">Czech</b></div>
+      <div class="grid two" id="voGrid">
+        <button class="cell" data-kind="vo" data-src="VO00001.mp3" aria-pressed="true">
+          <span class="n">VO 01</span><span class="t">Czech</span>
+        </button>
+        <button class="cell" data-kind="vo" data-src="VO0002.mp3" aria-pressed="false">
+          <span class="n">VO 02</span><span class="t">English</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- MUSIC -->
+    <section class="block">
+      <div class="label"><span>02 &mdash; Music</span><b id="muState">Track 01</b></div>
+      <div class="grid three" id="muGrid">
+        <button class="cell" data-kind="mu" data-src="Music_00001.mp3" aria-pressed="true"><span class="n">Mus 01</span><span class="t">Track 01</span></button>
+        <button class="cell" data-kind="mu" data-src="Music_00002.mp3" aria-pressed="false"><span class="n">Mus 02</span><span class="t">Track 02</span></button>
+        <button class="cell" data-kind="mu" data-src="Music_00003.mp3" aria-pressed="false"><span class="n">Mus 03</span><span class="t">Track 03</span></button>
+        <button class="cell" data-kind="mu" data-src="Music_00004.mp3" aria-pressed="false"><span class="n">Mus 04</span><span class="t">Track 04</span></button>
+        <button class="cell" data-kind="mu" data-src="Music_00005.mp3" aria-pressed="false"><span class="n">Mus 05</span><span class="t">Track 05</span></button>
+        <button class="cell" data-kind="mu" data-src="Music_00006.mp3" aria-pressed="false"><span class="n">Mus 06</span><span class="t">Track 06</span></button>
+      </div>
+    </section>
+
+    <!-- TRANSPORT -->
+    <section class="block transport">
+      <div class="label"><span>03 &mdash; Timeline</span></div>
+      <div class="tc"><span class="tc-cur" id="tcCur">00:00:00</span><span class="tc-dur" id="tcDur">/ 00:00:00</span></div>
+      <div class="scrub-wrap">
+        <div class="scrub-buf" id="bufBar"></div>
+        <input class="scrub" id="scrub" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek">
+      </div>
+      <div class="timerow"><b id="cur">0:00</b><span id="dur">0:00</span></div>
+      <div class="controls">
+        <button class="btn primary" id="playBtn">Play</button>
+        <button class="btn" id="stopBtn">Stop</button>
+        <button class="btn" id="backBtn">&minus;10s</button>
+        <button class="btn" id="fwdBtn">+10s</button>
+      </div>
+    </section>
+
+    <!-- MIX -->
+    <section class="block mix">
+      <div class="vol">
+        <div class="label"><span>Voice level</span><b id="voVolLbl">100</b></div>
+        <input class="vrange" id="voVol" type="range" min="0" max="100" value="100" aria-label="Voice level">
+      </div>
+      <div class="vol">
+        <div class="label"><span>Music level</span><b id="muVolLbl">100</b></div>
+        <input class="vrange" id="muVol" type="range" min="0" max="100" value="100" aria-label="Music level">
+      </div>
+    </section>
+
+    <footer class="foot">
+      <span><span class="dot" id="statusDot"></span><span id="statusTxt">Stopped</span></span>
+      <span id="pair">VO01 &middot; MUS01</span>
+    </footer>
+  </main>
+
+<script>
+(function(){
+  "use strict";
+
+  // Streams are 192 kbps CBR MP3 at 48 kHz: a 44-byte ID3 tag, one Info frame,
+  // then fixed 576-byte frames of 1152 samples (24 ms). Slices of that layout
+  // are fetched, decoded and scheduled on a single Web Audio clock, so every
+  // stem plays sample-aligned and a channel change is a gain crossfade.
+  var STREAM = "lq/";
+  var ID3 = 44;
+  var FRAME_BYTES = 576;
+  var FRAME = 0.024;
+  var FIRST = 1;
+  var LAST = 127000;
+  var DUR = (LAST - FIRST) * FRAME;
+  // Decoders need two frames to converge at the start of a slice, and WebKit
+  // corrupts the final frame, so slices overlap and only the middle is used.
+  var LEAD = 4;
+  var TAIL = 2;
+  var XF = 0.04;
+  var MAX_PARALLEL = 4;
+  var VO = ["VO00001.mp3", "VO0002.mp3"];
+  var TRACKS = Array.prototype.map.call(document.querySelectorAll(".cell[data-src]"), function(c){
+    return c.getAttribute("data-src");
+  });
+
+  var ctx = null;
+  var master = null;
+  var stems = {};
+  var net = { kbps: 0, rtt: 0.35, fails: 0 };
+
+  var state = {
+    vo: VO[0],
+    mu: "Music_00001.mp3",
+    playing: false,
+    buffering: false,
+    playhead: 0,
+    anchor: null,
+    voVol: 1,
+    muVol: 1,
+    pend: { vo: null, mu: null },
+    primed: null,
+    primedUntil: 0,
+    scrubbing: false,
+    stalls: 0
+  };
+
+  var scrub = document.getElementById("scrub");
+  var curEl = document.getElementById("cur");
+  var durEl = document.getElementById("dur");
+  var tcCur = document.getElementById("tcCur");
+  var tcDur = document.getElementById("tcDur");
+  var playBtn = document.getElementById("playBtn");
+  var bufBar = document.getElementById("bufBar");
+  var statusDot = document.getElementById("statusDot");
+  var statusTxt = document.getElementById("statusTxt");
+  var pairEl = document.getElementById("pair");
+  var voState = document.getElementById("voState");
+  var muState = document.getElementById("muState");
+  var voVol = document.getElementById("voVol");
+  var muVol = document.getElementById("muVol");
+  var voVolLbl = document.getElementById("voVolLbl");
+  var muVolLbl = document.getElementById("muVolLbl");
+
+  function frameAt(t){ return Math.min(LAST, Math.max(FIRST, FIRST + Math.floor(t / FRAME + 1e-6))); }
+  function timeOf(f){ return (f - FIRST) * FRAME; }
+  function vol(kind){ return kind === "vo" ? state.voVol : state.muVol; }
+  function otherVo(){ return state.vo === VO[0] ? VO[1] : VO[0]; }
+  function each(fn){ Object.keys(stems).forEach(function(k){ fn(stems[k], k); }); }
+
+  function stem(name){
+    var s = stems[name];
+    if(!s){
+      s = stems[name] = { name: name, segs: [], inflight: null, retryAt: 0, schedEnd: -1, needFrom: 0, gain: null, live: [] };
+    }
+    if(ctx && !s.gain){
+      s.gain = ctx.createGain();
+      s.gain.gain.value = 0;
+      s.gain.connect(master);
+    }
+    return s;
+  }
+  function audible(){ return [stem(state.vo), stem(state.mu)]; }
+
+  // ---- coverage -------------------------------------------------------
+
+  function coverEnd(s, f){
+    var end = f;
+    for(var i = 0; i < s.segs.length; i++){
+      var seg = s.segs[i];
+      if(seg.f1 <= end) continue;
+      if(seg.f0 > end) break;
+      end = seg.f1;
+    }
+    return end;
+  }
+  function nextStart(s, f){
+    for(var i = 0; i < s.segs.length; i++) if(s.segs[i].f0 > f) return s.segs[i].f0;
+    return LAST;
+  }
+  function aheadOf(s, t){ return timeOf(coverEnd(s, frameAt(t))) - t; }
+  function joinPoint(s, t, need){
+    for(var i = 0; i < s.segs.length; i++){
+      var seg = s.segs[i];
+      if(timeOf(seg.f1) <= t) continue;
+      var start = Math.max(t, timeOf(seg.f0));
+      var end = timeOf(coverEnd(s, frameAt(start)));
+      if(end - start >= need || end >= DUR - 0.001) return start;
+    }
+    return -1;
+  }
+  function insert(s, seg){
+    for(var i = 0; i < s.segs.length; i++){
+      var o = s.segs[i];
+      if(o.f1 > seg.f0 && o.f0 < seg.f1) return;
+    }
+    s.segs.push(seg);
+    s.segs.sort(function(a, b){ return a.f0 - b.f0; });
+  }
+
+  // ---- network --------------------------------------------------------
+
+  function tight(){
+    var c = navigator.connection;
+    if(c && (c.saveData || /2g/.test(c.effectiveType || ""))) return true;
+    return net.kbps > 0 && net.kbps < 900;
+  }
+  function fast(){ return !tight() && net.kbps > 2000; }
+  // On a fast, non-cellular link every track keeps a few seconds decoded at
+  // the playhead, so a switch never waits for the server.
+  function warmAll(){
+    var c = navigator.connection;
+    if(tight() || (c && c.type === "cellular")) return (net.warm = false);
+    if(net.kbps > 6000) net.warm = true;
+    else if(net.kbps < 3000) net.warm = false;
+    return !!net.warm;
+  }
+  function aheadTarget(){ return tight() ? 25 : (net.kbps > 4000 ? 45 : 35); }
+  // Seconds to fetch a slice of n frames while sharing the link with one other stem.
+  function fetchTime(n){ return net.rtt + n * FRAME_BYTES * 8 / 1000 / ((net.kbps || 1000) / 2); }
+  function switchLead(){ return Math.min(5, Math.max(0.25, fetchTime(110) * 1.3 + 0.1)); }
+  // Buffered audio a newly joined stem needs so its next slice arrives in time.
+  function joinNeed(){ return Math.min(2.4, Math.max(0.5, fetchTime(56) * 1.5)); }
+  // Latency (time to response headers) and transfer rate are tracked apart,
+  // otherwise a distant but fast server looks slow.
+  function sample(bytes, ttfb, xfer){
+    net.rtt = net.seen ? net.rtt * 0.7 + ttfb * 0.3 : ttfb;
+    net.seen = true;
+    if(bytes >= 60000 || !net.kbps){
+      var kbps = Math.min(200000, bytes * 8 / 1000 / Math.max(0.005, xfer));
+      net.kbps = net.kbps ? net.kbps * 0.7 + kbps * 0.3 : kbps;
+    }
+  }
+
+  function decode(ab){
+    return new Promise(function(resolve, reject){
+      var p = ctx.decodeAudioData(ab, resolve, reject);
+      if(p && p.then) p.then(resolve, reject);
+    });
+  }
+
+  function load(s, f0, f1){
+    var a = Math.max(FIRST, f0 - LEAD);
+    var b = Math.min(LAST, f1 + TAIL);
+    var ctrl = window.AbortController ? new AbortController() : null;
+    var job = { f0: f0, f1: f1, ctrl: ctrl, dead: false };
+    var bytes = (b - a) * FRAME_BYTES;
+    var started = performance.now();
+    s.inflight = job;
+    fetch(STREAM + s.name, {
+      headers: { Range: "bytes=" + (ID3 + a * FRAME_BYTES) + "-" + (ID3 + b * FRAME_BYTES - 1) },
+      signal: ctrl ? ctrl.signal : undefined
+    }).then(function(res){
+      if(res.status !== 206){
+        if(ctrl) ctrl.abort();
+        throw new Error("no range support");
+      }
+      job.head = performance.now();
+      return res.arrayBuffer();
+    }).then(function(ab){
+      var end = performance.now();
+      sample(bytes, (job.head - started) / 1000, (end - job.head) / 1000);
+      if(job.dead) throw new Error("stale");
+      return decode(ab);
+    }).then(function(buf){
+      if(s.inflight === job) s.inflight = null;
+      if(job.dead) return;
+      net.fails = 0;
+      insert(s, { f0: f0, f1: f1, buf: buf, skip: (f0 - a) * FRAME });
+      onData(s);
+    }).catch(function(){
+      if(s.inflight === job) s.inflight = null;
+      if(!job.dead){
+        net.fails++;
+        s.retryAt = performance.now() + Math.min(4000, 400 * net.fails);
+      }
+    }).then(pump);
+  }
+
+  function wants(){
+    var t = now();
+    var list = [];
+    var look = state.playing ? aheadTarget() : 3;
+    [state.vo, state.mu].forEach(function(name){
+      var s = stem(name);
+      var from = Math.max(t, s.needFrom || 0);
+      list.push({ s: s, from: from, ahead: look, pri: aheadOf(s, from) < 6 ? 1 : 3 });
+    });
+    if(state.playing){
+      var lead = switchLead();
+      ["vo", "mu"].forEach(function(kind){
+        if(state.pend[kind]) list.push({ s: stem(state.pend[kind]), from: t + lead, ahead: 2.5, pri: 0 });
+      });
+      if(state.primed && performance.now() < state.primedUntil){
+        list.push({ s: stem(state.primed), from: t + lead, ahead: 2.5, pri: 2 });
+      }
+      if(warmAll()){
+        var busy = [state.vo, state.mu, state.pend.vo, state.pend.mu];
+        TRACKS.forEach(function(name){
+          if(busy.indexOf(name) === -1) list.push({ s: stem(name), from: t + 0.1, ahead: 12, low: 5, pri: 4 });
+        });
+      } else if(fast()){
+        list.push({ s: stem(otherVo()), from: t + 0.1, ahead: net.kbps > 4000 ? 20 : 10, pri: 4 });
+      }
+    }
+    return list.sort(function(a, b){ return a.pri - b.pri; });
+  }
+
+  // A slice is only playable once complete, so size it to arrive well before
+  // the audio already buffered runs out (two stems share the connection).
+  function sliceFrames(have, pri){
+    if(pri === 0) return 104;
+    if(have < 1.5) return 50;
+    var secs = 2;
+    if(net.kbps) secs = (have * 0.6 - net.rtt) * (net.kbps / 2) / 192;
+    return Math.round(Math.min(fast() ? 10 : 4, Math.max(1.2, secs)) / FRAME);
+  }
+
+  function drop(s){
+    var job = s.inflight;
+    if(!job) return;
+    job.dead = true;
+    if(job.ctrl) job.ctrl.abort();
+    s.inflight = null;
+  }
+
+  function pump(){
+    if(!ctx) return;
+    var list = wants();
+    var needed = list.map(function(w){ return w.s; });
+    each(function(s){ if(s.inflight && needed.indexOf(s) === -1) drop(s); });
+    var busy = 0;
+    each(function(s){ if(s.inflight) busy++; });
+    var clock = performance.now();
+    list.forEach(function(w){
+      var s = w.s;
+      if(s.inflight || clock < s.retryAt) return;
+      if(busy >= MAX_PARALLEL && w.pri > 2) return;
+      var from = coverEnd(s, frameAt(w.from));
+      if(from >= LAST) return;
+      var have = timeOf(from) - w.from;
+      if(have >= w.ahead || (w.low != null && have >= w.low)) return;
+      var to = Math.min(LAST, from + sliceFrames(have, w.pri), nextStart(s, from));
+      if(to <= from) return;
+      load(s, from, to);
+      busy++;
+    });
+  }
+
+  // ---- playback -------------------------------------------------------
+
+  function now(){
+    if(state.anchor && ctx){
+      return Math.max(0, Math.min(DUR, state.anchor.t + (ctx.currentTime - state.anchor.ctx)));
+    }
+    return state.playhead;
+  }
+  function ctxAt(t){ return state.anchor.ctx + (t - state.anchor.t); }
+
+  // Adjacent slices overlap by 2*SEAM and crossfade. Both hold identical
+  // decoded samples there, so the sum is exact even when the browser rounds
+  // a start or stop time by a sample.
+  var SEAM = 0.004;
+  function extend(s){
+    if(!state.anchor || s.schedEnd < 0) return;
+    for(var i = 0; i < s.segs.length; i++){
+      var seg = s.segs[i];
+      var t1 = timeOf(seg.f1);
+      if(t1 <= s.schedEnd + 1e-6) continue;
+      var t0 = timeOf(seg.f0);
+      if(t0 > s.schedEnd + 1e-6) break;
+      var start = s.schedEnd;
+      var tail = seg.f1 < LAST;
+      var inEnd = start + SEAM;
+      var outStart = t1 - SEAM;
+      if(outStart < inEnd) inEnd = outStart = (start + t1) / 2;
+      var from = start - SEAM;
+      var to = tail ? t1 + SEAM : t1;
+      var off = seg.skip + (from - t0);
+      if(off < 0){ from -= off; off = 0; }
+      var when = ctxAt(from);
+      var dur = to - from;
+      var late = ctx.currentTime - when;
+      if(late > 0){ when += late; off += late; dur -= late; }
+      if(dur > 0.001){
+        var src = ctx.createBufferSource();
+        var fade = ctx.createGain();
+        src.buffer = seg.buf;
+        fade.gain.value = 0;
+        fade.gain.setValueAtTime(0, ctxAt(start - SEAM));
+        fade.gain.linearRampToValueAtTime(1, ctxAt(inEnd));
+        if(tail){
+          fade.gain.setValueAtTime(1, ctxAt(outStart));
+          fade.gain.linearRampToValueAtTime(0, ctxAt(t1 + SEAM));
+        }
+        src.connect(fade);
+        fade.connect(s.gain);
+        src.start(when, off, dur);
+        s.live.push({ src: src, end: when + dur });
+      }
+      s.schedEnd = t1;
+    }
+  }
+
+  function silence(s, when){
+    s.live.forEach(function(l){ try { l.src.stop(when); } catch(e){} });
+    s.live = [];
+    s.schedEnd = -1;
+  }
+
+  function halt(atT){
+    var t = now();
+    if(ctx && state.anchor){
+      var nowC = ctx.currentTime;
+      var when = nowC + 0.015;
+      if(atT != null) when = Math.max(when, ctxAt(atT));
+      var g = master.gain;
+      var v = g.value;
+      g.cancelScheduledValues(nowC);
+      g.setValueAtTime(v, nowC);
+      if(when - 0.015 > nowC) g.setValueAtTime(v, when - 0.015);
+      g.linearRampToValueAtTime(0, when);
+      each(function(s){ silence(s, when); });
+      t = state.anchor.t + (when - state.anchor.ctx);
+    }
+    state.anchor = null;
+    state.playhead = Math.max(0, Math.min(DUR, t));
+  }
+
+  function startAt(t){
+    t = Math.round(Math.max(0, t) * 48000) / 48000;
+    var nowC = ctx.currentTime;
+    var when = Math.ceil((nowC + 0.06) * 48000) / 48000;
+    state.anchor = { ctx: when, t: t };
+    state.buffering = false;
+    master.gain.setValueAtTime(0, when);
+    master.gain.linearRampToValueAtTime(1, when + 0.015);
+    var on = [stem(state.vo), stem(state.mu)];
+    each(function(s){
+      var g = s.gain.gain;
+      g.cancelScheduledValues(nowC);
+      g.setValueAtTime(on.indexOf(s) === -1 ? 0 : vol(s === on[0] ? "vo" : "mu"), nowC);
+    });
+    on.forEach(function(s){
+      s.needFrom = t;
+      s.schedEnd = t;
+      extend(s);
+    });
+  }
+
+  function tryResume(){
+    var t = state.playhead;
+    var need = (fast() ? 0.5 : 2) + Math.min(6, 2 * state.stalls);
+    need = Math.min(need, DUR - t - 0.01);
+    if(audible().every(function(s){ return aheadOf(s, t) >= need; })) startAt(t);
+  }
+
+  function commit(kind, name){
+    state[kind] = name;
+    state.pend[kind] = null;
+    stem(name).needFrom = state.playhead;
+    setLoading(name, false);
+  }
+
+  function trySwitch(kind){
+    var name = state.pend[kind];
+    if(!name) return;
+    if(!state.anchor){
+      commit(kind, name);
+      setStatus();
+      return;
+    }
+    var s = stem(name);
+    var at = joinPoint(s, now() + 0.08, joinNeed());
+    if(at < 0) return;
+    var old = stem(state[kind]);
+    var T = ctxAt(at);
+    var nowC = ctx.currentTime;
+    silence(s, T);
+    s.needFrom = at;
+    s.schedEnd = at;
+    extend(s);
+    var g = s.gain.gain;
+    var gv = g.value;
+    g.cancelScheduledValues(nowC);
+    g.setValueAtTime(gv, nowC);
+    g.setValueAtTime(gv, T);
+    g.linearRampToValueAtTime(vol(kind), T + XF);
+    var og = old.gain.gain;
+    var ov = og.value;
+    og.cancelScheduledValues(nowC);
+    og.setValueAtTime(ov, nowC);
+    og.setValueAtTime(ov, T);
+    og.linearRampToValueAtTime(0, T + XF);
+    silence(old, T + XF + 0.005);
+    state[kind] = name;
+    state.pend[kind] = null;
+    setLoading(name, false);
+    setStatus();
+  }
+
+  function switchTo(kind, name){
+    var prev = state.pend[kind];
+    if(prev && prev !== name) setLoading(prev, false);
+    if(state[kind] === name){
+      state.pend[kind] = null;
+      setStatus();
+      return;
+    }
+    state.pend[kind] = name;
+    trySwitch(kind);
+    if(state.pend[kind] === name) setLoading(name, true);
+    pump();
+    setStatus();
+  }
+
+  function onData(s){
+    if(state.anchor && s.schedEnd >= 0) extend(s);
+    if(state.pend.vo === s.name) trySwitch("vo");
+    if(state.pend.mu === s.name) trySwitch("mu");
+    if(state.playing && state.buffering) tryResume();
+    setStatus();
+  }
+
+  function ensureCtx(){
+    if(ctx) return true;
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if(!AC) return false;
+    try { ctx = new AC({ sampleRate: 48000 }); }
+    catch(e){ ctx = new AC(); }
+    master = ctx.createGain();
+    master.connect(ctx.destination);
+    try { if(navigator.audioSession) navigator.audioSession.type = "playback"; } catch(e){}
+    ctx.onstatechange = setStatus;
+    each(function(s, k){ stem(k); });
+    return true;
+  }
+
+  function play(){
+    if(!ensureCtx()){
+      statusTxt.textContent = "Web Audio unavailable";
+      return;
+    }
+    if(ctx.state !== "running"){
+      var r = ctx.resume();
+      if(r && r.catch) r.catch(function(){});
+    }
+    // iOS unlocks audio output only from a buffer started inside the gesture.
+    var unlock = ctx.createBufferSource();
+    unlock.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
+    unlock.connect(ctx.destination);
+    unlock.start(0);
+    state.playing = true;
+    state.buffering = true;
+    state.stalls = 0;
+    audible().forEach(function(s){ s.needFrom = state.playhead; });
+    tryResume();
+    pump();
+    setStatus();
+  }
+  function pause(){
+    halt();
+    state.playing = false;
+    state.buffering = false;
+    trySwitch("vo");
+    trySwitch("mu");
+    setStatus();
+  }
+  function toggle(){
+    if(state.playing && ctx && ctx.state !== "running"){
+      ctx.resume();
+      return;
+    }
+    state.playing ? pause() : play();
+  }
+  function stop(){
+    pause();
+    state.playhead = 0;
+    updateUI();
+  }
+
+  function seek(t){
+    t = Math.max(0, Math.min(DUR - 0.05, t));
+    halt();
+    state.playhead = t;
+    var f = frameAt(t);
+    each(function(s){
+      var job = s.inflight;
+      if(job && !(coverEnd(s, f) >= job.f0 && job.f1 > f)) drop(s);
+      s.needFrom = t;
+    });
+    if(state.playing){
+      state.buffering = true;
+      state.stalls = 0;
+      trySwitch("vo");
+      trySwitch("mu");
+      tryResume();
+    }
+    pump();
+    updateUI();
+    setStatus();
+  }
+
+  function evict(t){
+    var keep = {};
+    [state.vo, state.mu, state.pend.vo, state.pend.mu, state.primed, otherVo()].forEach(function(n){ if(n) keep[n] = true; });
+    var ahead = aheadTarget() + 20;
+    var warm = warmAll();
+    each(function(s, k){
+      var back = keep[k] ? 15 : (warm ? 1 : 0);
+      var fwd = keep[k] ? ahead : (warm ? 30 : 12);
+      s.segs = s.segs.filter(function(seg){
+        return timeOf(seg.f1) > t - back && timeOf(seg.f0) < t + fwd;
+      });
+      if(ctx) s.live = s.live.filter(function(l){ return l.end > ctx.currentTime - 1; });
+    });
+  }
+
+  function tick(){
+    if(!ctx) return;
+    var t = now();
+    if(state.playing && state.anchor){
+      if(t >= DUR - 0.03){
+        pause();
+        state.playhead = 0;
+        updateUI();
+        return;
+      }
+      var minEnd = Infinity;
+      audible().forEach(function(s){ minEnd = Math.min(minEnd, s.schedEnd < 0 ? t : s.schedEnd); });
+      if(minEnd < DUR - 0.001 && minEnd - t < 0.25){
+        halt(minEnd);
+        state.buffering = true;
+        state.stalls++;
+      }
+    }
+    trySwitch("vo");
+    trySwitch("mu");
+    if(state.playing && state.buffering) tryResume();
+    evict(now());
+    pump();
+    setStatus();
+  }
+
+  // ---- UI -------------------------------------------------------------
+
+  function fmt(t){
+    if(!isFinite(t) || t < 0) t = 0;
+    var m = Math.floor(t / 60), s = Math.floor(t % 60);
+    return m + ":" + (s < 10 ? "0" : "") + s;
+  }
+  function p2(n){ return (n < 10 ? "0" : "") + n; }
+  function fmtTC(t){
+    if(!isFinite(t) || t < 0) t = 0;
+    var h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = Math.floor(t % 60);
+    return p2(h) + ":" + p2(m) + ":" + p2(s);
+  }
+  function setLoading(name, loading){
+    document.querySelectorAll(".cell").forEach(function(btn){
+      if(btn.getAttribute("data-src") === name) btn.classList.toggle("loading", loading);
+    });
+  }
+  function setStatus(){
+    var label = "Stopped";
+    if(state.playing) label = state.anchor && ctx && ctx.state === "running" ? "Playing" : "Buffering";
+    statusTxt.textContent = label;
+    statusDot.classList.toggle("on", state.playing);
+    playBtn.textContent = state.playing ? "Pause" : "Play";
+    voState.textContent = state.vo === VO[0] ? "Czech" : "English";
+    var n = parseInt(state.mu.replace(/^\D+/, ""), 10);
+    muState.textContent = "Track " + p2(n);
+    pairEl.textContent = (state.vo === VO[0] ? "VO01" : "VO02") + " &middot; MUS" + p2(n);
+  }
+  function updateUI(){
+    if(state.scrubbing) return;
+    var t = now();
+    curEl.textContent = fmt(t);
+    tcCur.textContent = fmtTC(t);
+    scrub.value = Math.round((t / DUR) * 1000);
+  }
+  function updateBufBar(){
+    var t = now();
+    var end = Math.min.apply(null, audible().map(function(s){ return timeOf(coverEnd(s, frameAt(t))); }));
+    if(end <= t){ bufBar.style.width = "0"; return; }
+    bufBar.style.left = ((t / DUR) * 100).toFixed(2) + "%";
+    bufBar.style.width = (((end - t) / DUR) * 100).toFixed(2) + "%";
+  }
+
+  function prime(e){
+    var btn = e.target.closest(".cell");
+    if(!btn || !state.playing || !ctx) return;
+    var name = btn.getAttribute("data-src");
+    if(name === state.vo || name === state.mu) return;
+    state.primed = name;
+    state.primedUntil = performance.now() + 4000;
+    pump();
+  }
+  function grid(e){
+    var btn = e.target.closest(".cell");
+    if(!btn) return;
+    var kind = btn.getAttribute("data-kind");
+    btn.parentNode.querySelectorAll(".cell").forEach(function(c){
+      c.setAttribute("aria-pressed", c === btn ? "true" : "false");
+    });
+    switchTo(kind, btn.getAttribute("data-src"));
+  }
+  ["voGrid", "muGrid"].forEach(function(id){
+    var el = document.getElementById(id);
+    el.addEventListener("pointerdown", prime);
+    el.addEventListener("click", grid);
+  });
+
+  playBtn.addEventListener("click", toggle);
+  document.getElementById("stopBtn").addEventListener("click", stop);
+  document.getElementById("backBtn").addEventListener("click", function(){ seek(now() - 10); });
+  document.getElementById("fwdBtn").addEventListener("click", function(){ seek(now() + 10); });
+
+  scrub.addEventListener("input", function(){
+    state.scrubbing = true;
+    var t = (scrub.value / 1000) * DUR;
+    curEl.textContent = fmt(t);
+    tcCur.textContent = fmtTC(t);
+  });
+  scrub.addEventListener("change", function(){
+    state.scrubbing = false;
+    seek((scrub.value / 1000) * DUR);
+  });
+
+  function setVol(kind, v){
+    state[kind + "Vol"] = v;
+    if(!ctx || !state.anchor) return;
+    var g = stem(state[kind]).gain.gain;
+    g.cancelScheduledValues(ctx.currentTime);
+    g.setTargetAtTime(v, ctx.currentTime, 0.02);
+  }
+  voVol.addEventListener("input", function(){ voVolLbl.textContent = voVol.value; setVol("vo", voVol.value / 100); });
+  muVol.addEventListener("input", function(){ muVolLbl.textContent = muVol.value; setVol("mu", muVol.value / 100); });
+
+  document.addEventListener("keydown", function(e){
+    if(e.target.tagName === "INPUT") return;
+    if(e.code === "Space"){ e.preventDefault(); toggle(); }
+    else if(e.code === "ArrowLeft") seek(now() - 5);
+    else if(e.code === "ArrowRight") seek(now() + 5);
+  });
+
+  document.addEventListener("visibilitychange", function(){
+    if(!document.hidden && ctx && state.playing && ctx.state !== "running"){
+      var r = ctx.resume();
+      if(r && r.catch) r.catch(function(){});
+    }
+  });
+
+  if("mediaSession" in navigator){
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({ title: document.querySelector("h1").textContent });
+      navigator.mediaSession.setActionHandler("play", function(){ if(!state.playing) play(); });
+      navigator.mediaSession.setActionHandler("pause", function(){ if(state.playing) pause(); });
+    } catch(e){}
+  }
+
+  // An earlier build installed a range-rewriting service worker; remove it.
+  if(navigator.serviceWorker && navigator.serviceWorker.getRegistrations){
+    navigator.serviceWorker.getRegistrations().then(function(rs){
+      rs.forEach(function(r){ r.unregister(); });
+    }).catch(function(){});
+  }
+
+  setInterval(tick, 100);
+  var lastBar = 0;
+  (function frame(ts){
+    updateUI();
+    if(ts - lastBar > 400){ lastBar = ts; updateBufBar(); }
+    requestAnimationFrame(frame);
+  })(0);
+
+  durEl.textContent = fmt(DUR);
+  tcDur.textContent = "/ " + fmtTC(DUR);
+  setStatus();
+})();
+</script>
+
+<script>
+(function(){
+  if (location.protocol === 'file:') {
+    var box = document.createElement('div');
+    box.style.position = 'fixed';
+    box.style.left = '12px';
+    box.style.right = '12px';
+    box.style.bottom = '12px';
+    box.style.zIndex = '99999';
+    box.style.background = '#111';
+    box.style.color = '#fff';
+    box.style.padding = '12px 14px';
+    box.style.borderRadius = '8px';
+    box.style.fontFamily = 'sans-serif';
+    box.style.fontSize = '14px';
+    box.style.lineHeight = '1.5';
+    box.style.boxShadow = '0 12px 24px rgba(0,0,0,0.25)';
+    box.innerHTML = 'Offline verze je načtena z lokální složky. Pro plnou funkci přehrajte stránku přes lokální HTTP server. Příklad: <code>php -S 0.0.0.0:8000 -t kaleidoscope-offline</code> a následně otevřete <code>http://localhost:8000/</code>.';
+    document.body.appendChild(box);
+  }
+})();
+</script>
+</body>
+</html>
